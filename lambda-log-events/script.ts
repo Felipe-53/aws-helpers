@@ -1,10 +1,10 @@
 import assert from "node:assert";
-import chalk from "chalk";
 import {
   CloudWatchLogsClient,
   DescribeLogStreamsCommand,
   GetLogEventsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
+import { appendFileSync, writeFileSync } from "node:fs";
 
 const functionName = process.argv[2];
 assert(
@@ -21,6 +21,7 @@ async function main() {
     logGroupName,
     descending: true,
     limit: 1,
+    orderBy: "LastEventTime",
   });
 
   const { logStreams } = await client.send(describeLogStreamCommand);
@@ -32,10 +33,14 @@ async function main() {
   const getLogEventsCommand = new GetLogEventsCommand({
     logStreamName: lasLogStream.logStreamName,
     logGroupIdentifier: logGroupName,
-    limit: 5,
+    limit: 10,
+    startFromHead: true,
   });
 
   const logEvents = await client.send(getLogEventsCommand);
+
+  const outputFilename = "log.txt";
+  writeFileSync(outputFilename, "");
 
   logEvents.events?.forEach((event) => {
     let message: string | object;
@@ -43,17 +48,17 @@ async function main() {
     assert(event.message);
 
     try {
-      message = JSON.stringify(JSON.parse(event.message), null, 4);
+      message = JSON.stringify(JSON.parse(event.message), null, 4) + "\n";
     } catch {
       message = event.message;
     }
 
-    console.log(
-      `${chalk.green("Log Event")}: ${new Date(
-        event.ingestionTime!
-      ).toLocaleString("pt-br")}`
+    appendFileSync(
+      outputFilename,
+      `Log Event: ${new Date(event.ingestionTime!).toLocaleString("pt-br")}\n`
     );
-    console.log(`${message}\n`);
+
+    appendFileSync(outputFilename, `${message}\n`);
   });
 }
 
